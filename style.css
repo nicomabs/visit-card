@@ -1,11 +1,10 @@
 /*
-  Hover and click on the card for animations!
+  Carte de visite 3D avec QR Code + Responsive
+  Basé sur votre code original avec corrections
 */
 
 @import url(https://fonts.googleapis.com/css?family=Cormorant+Garamond);
-
-@import url(https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700;900&family=Italiana&family=Suranna&display=swap);
-
+@import url(https://fonts.googleapis.com/css2?family=Italiana&display=swap);
 
 *,
 *::before,
@@ -14,18 +13,22 @@
 }
 
 html {
-  font-family: "Italiana", serif;
+  font-family: "Cormorant Garamond", serif;
   text-transform: uppercase;
-  box-sizing: inherit;
   font-size: 10.5px;
   letter-spacing: 1px;
-  text-shadow: 0 0 2px rgba(0, 0, 0, .5),
-                -1px -1px 1px rgba(179, 179, 179, .5),
-                1px 1px 0 rgba(255, 255, 255, 0.55),
-                0 1px 3px white;
-  overflow: hidden;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5),
+               -1px -1px 1px rgba(179, 179, 179, 0.5),
+               1px 1px 0 rgba(255, 255, 255, 0.55),
+               0 1px 3px white;
+  overflow-x: hidden;
   color: #191919;
   background-color: azure;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
 }
 
 button {
@@ -36,18 +39,15 @@ button {
   border: none;
   padding: 0;
   font: inherit;
-  text-transform: inherit;
-  letter-spacing: inherit;
-  text-shadow: inherit;
   cursor: pointer;
-  outline: inherit;
+  outline: none;
   z-index: 10;
 }
 
 .clearfix::after {
-    content: "";
-    clear: both;
-    display: table;
+  content: "";
+  clear: both;
+  display: table;
 }
 
 .big {
@@ -56,62 +56,57 @@ button {
 
 .med {
   font-size: 100%;
-  letter-spacing: .5px;
+  letter-spacing: 0.5px;
 }
 
 .small {
   font-size: 65%;
-  letter-spacing: .5px;
+  letter-spacing: 0.5px;
 }
 
-.no-space {
-  letter-spacing: 0px;
-}
-
+/* Carte 3D (version originale corrigée) */
 .card {
   background-color: #f4f1eb;
   background-image: url("https://www.transparenttextures.com/patterns/paper-fibers.png");
   height: 200px;
   width: 350px;
-  margin: 20vh auto 0 auto;
+  margin: 0 auto;
   padding: 20px 10px 10px 10px;
   transform: rotateX(60deg) rotateY(0deg) rotateZ(45deg);
-  /*transform-origin: 50% 100%;*/
-  box-shadow: 0;
-  transition: transform .4s ease,
-              box-shadow .4s ease;
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  transition: transform 0.4s ease, box-shadow 0.4s ease;
+  position: relative;
 }
 
 .card:hover {
-  cursor: pointer;
   transform: rotateX(60deg) rotateY(0deg) rotateZ(45deg) translateZ(10px);
-  box-shadow: 20px 20px 20px rgba(0, 0, 0, .4);
+  box-shadow: 20px 20px 20px rgba(0, 0, 0, 0.4);
 }
 
-.card:focus {
+.card:active {
   transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) translateZ(10px);
-  box-shadow: 0px 10px 10px rgba(0, 0, 0, .4);
+  box-shadow: 0 10px 10px rgba(0, 0, 0, 0.4);
 }
 
-.card:focus::before {
-  transform: skewX(0deg) translateX(0px) translateY(0px);
-  height: 0px;
+.card:active::before {
+  transform: skewX(0deg) translateX(0) translateY(0);
+  height: 0;
 }
 
-.card:focus::after {
-  transform: skewY(0deg) translateX(0px) translateY(0px);
-  width: 0px;
+.card:active::after {
+  transform: skewY(0deg) translateX(0) translateY(0);
+  width: 0;
 }
 
+/* Bords 3D (corrigés) */
 .card::before,
 .card::after {
   content: "";
   position: absolute;
   display: block;
   background-color: grey;
-  transition: transform .4s ease,
-              height .4s ease,
-              width .4s ease;
+  transition: all 0.4s ease;
+  z-index: -1;
 }
 
 .card::before {
@@ -120,6 +115,7 @@ button {
   bottom: 0;
   left: 0;
   transform: skewX(45deg) translateX(-3px) translateY(6px);
+  transform-origin: bottom left;
 }
 
 .card::after {
@@ -128,6 +124,22 @@ button {
   top: 0;
   right: 0;
   transform: skewY(45deg) translateX(6px) translateY(-3px);
+  transform-origin: top right;
+}
+
+/* Conteneur QR Code */
+.qrcode-container {
+  position: absolute;
+  bottom: 15px;
+  right: 15px;
+  width: 60px;
+  height: 60px;
+  background: white;
+  padding: 5px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 .row {
@@ -149,4 +161,30 @@ button {
 
 p {
   margin: 0;
+}
+
+/* Responsive pour iPhone */
+@media (max-width: 768px) {
+  html {
+    font-size: 8px;
+    padding: 10px;
+  }
+
+  .card {
+    width: 90vw;
+    height: 180px;
+    transform: rotateX(45deg) rotateY(0) rotateZ(30deg);
+    margin: 0;
+  }
+
+  .qrcode-container {
+    width: 50px;
+    height: 50px;
+    bottom: 10px;
+    right: 10px;
+  }
+
+  .row:nth-child(2) {
+    margin: 20px 0 30px 0;
+  }
 }

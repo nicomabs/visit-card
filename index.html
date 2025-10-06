@@ -1,21 +1,62 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
-<title>Carte de visite</title>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="style.css">
-<button class="card">
-    <div class="row clearfix">
-      <div class="left big">+33 6 43 00 81 34</div>
-      <div class="right"><p><span class="big">N</span>ovence   <span class="big">A</span>vocats</p></div>
-    </div>
-    <div class="row">
-      <p><span class="big">O</span>riane <span class="big">Claude</span></p>
-    </div>
-    <div class="row">
-      <p><span class="med">21 rue Bouffard, 33000 Bordeaux</span>
-      </p>
-    </div>
-  </button>
-  </html>
+    <title>Carte de visite - Oriane Claude</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="stylesheet" href="style.css">
+    <!-- Générateur de QR Code (à remplacer par votre lien vCard ou site) -->
+    <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
+</head>
+<body>
+    <button class="card" id="businessCard">
+        <div class="row clearfix">
+            <div class="left big">+33 6 43 00 81 34</div>
+            <div class="right">
+                <p><span class="big">N</span>ovence <span class="big">A</span>vocats</p>
+            </div>
+        </div>
+        <div class="row">
+            <p><span class="big">O</span>riane <span class="big">Claude</span></p>
+        </div>
+        <div class="row">
+            <p><span class="med">21 rue Bouffard, 33000 Bordeaux</span></p>
+        </div>
+        <!-- Conteneur pour le QR Code -->
+        <div class="qrcode-container" id="qrcode"></div>
+    </button>
+
+    <!-- Script pour générer le QR Code (remplacez l'URL) -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+          const card = document.querySelector('.card');
+          const qrcodeContainer = document.getElementById('qrcode');
+      
+          // Génération du QR Code (remplacez l'URL)
+          new QRCode(qrcodeContainer, {
+            text: "https://vcard.example.com/oriane-claude.vcf",
+            width: 60,
+            height: 60,
+            colorDark: "#000",
+            colorLight: "#fff",
+          });
+      
+          // Effet toggle au clic
+          card.addEventListener('click', function(e) {
+            e.preventDefault();
+            this.classList.toggle('active');
+          });
+        });
+
+        // Effet toggle au clic
+    card.addEventListener('click', function(e) {
+      e.preventDefault();
+      this.classList.toggle('active');
+    });
+      </script>
+      
+      
+</body>
+</html>
