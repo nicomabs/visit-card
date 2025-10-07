@@ -3,11 +3,20 @@
    @import url("https://fonts.googleapis.com/css?family=Cormorant+Garamond");
 
    :root {
-     --primary-color: #f4f1eb;
+     --primary-color: #fff8e9;
      --text-color: #191919;
      --shadow-color: rgba(0, 0, 0, 0.4);
      --border-color: grey;
-     --bg-color: azure;
+     --bg-color:
+     radial-gradient(70% 40% at 50% 18%,
+       rgba(255,255,255,.55) 0%,
+       rgba(255,255,255,0) 60%)
+     ,linear-gradient(180deg,
+       #B9DBEE 0%,
+       #D9EEF6 55%,
+       #F3F7F9 85%,
+       #FFFFFF 100%);
+   
      --font-main: "Cormorant Garamond", serif;
      --transition-ease: cubic-bezier(0.4, 0, 0.2, 1);
    
@@ -47,7 +56,7 @@
      text-shadow: var(--ios-text-shadow);
      overflow: hidden;            /* conservé: évite les scrolls parasites de la scène 3D */
      color: var(--text-color);
-     background-color: var(--bg-color);
+     background: var(--bg-color);
      height: 100%;
      -webkit-text-size-adjust: 100%;
      -webkit-font-smoothing: var(--ios-font-smoothing);
