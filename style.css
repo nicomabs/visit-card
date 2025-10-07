@@ -1,190 +1,346 @@
-/*
-  Carte de visite 3D avec QR Code + Responsive
-  Basé sur votre code original avec corrections
-*/
+/* ========== 1) Imports & Variables ==========
+   Garder @import tout en haut pour éviter FOUT */
+   @import url("https://fonts.googleapis.com/css?family=Cormorant+Garamond");
 
-@import url(https://fonts.googleapis.com/css?family=Cormorant+Garamond);
-@import url(https://fonts.googleapis.com/css2?family=Italiana&display=swap);
+   :root {
+     --primary-color: #f4f1eb;
+     --text-color: #191919;
+     --shadow-color: rgba(0, 0, 0, 0.4);
+     --border-color: grey;
+     --bg-color: azure;
+     --font-main: "Cormorant Garamond", serif;
+     --transition-ease: cubic-bezier(0.4, 0, 0.2, 1);
+   
+     /* dimensions carte (px) */
+     --card-width: 350px;
+     --card-height: 200px;
+   
+     /* version numérique pratique pour les calculs */
+     --card-w: 350;
+     --card-h: 200;
+   
+     --border-width: 6px;
+     --mobile-scale: 0.85; /* valeur utilisée en dernier recours */
+   
+     /* iOS: sera activé via @supports plus bas */
+     --ios-font-smoothing: antialiased;
+     --ios-text-shadow: 0 0 2px rgba(0,0,0,.5), -1px -1px 1px rgba(179,179,179,.5),
+                        1px 1px 0 rgba(255,255,255,.55), 0 1px 3px #fff;
+   }
+   
+   /* iOS: active des valeurs adaptées si WebKit mobile est présent */
+   @supports (-webkit-touch-callout: none) {
+     :root {
+       --ios-font-smoothing: antialiased;
+       --ios-text-shadow: 0 0 1px rgba(0,0,0,.3);
+     }
+   }
+   
+   /* ========== 2) Reset léger & typo ========== */
+   * { box-sizing: border-box; }
+   
+   html {
+     font-family: var(--font-main);
+     text-transform: uppercase;
+     font-size: 10.5px;
+     letter-spacing: 1px;
+     text-shadow: var(--ios-text-shadow);
+     overflow: hidden;            /* conservé: évite les scrolls parasites de la scène 3D */
+     color: var(--text-color);
+     background-color: var(--bg-color);
+     height: 100%;
+     -webkit-text-size-adjust: 100%;
+     -webkit-font-smoothing: var(--ios-font-smoothing);
+   }
+   
+   body {
+     -webkit-font-smoothing: antialiased;
+     -moz-osx-font-smoothing: grayscale;
+     min-height: 100vh;
+     position: relative;
+   }
+   
+   button {
+     display: block;
+     position: relative;
+     background: none;
+     color: inherit;
+     border: none;
+     padding: 0;
+     font: inherit;
+     cursor: pointer;
+     z-index: 10;
+     -webkit-tap-highlight-color: transparent;
+   }
+   
+   .clearfix::after { content: ""; display: table; clear: both; }
+   
+   .big { font-size: 150%; }
+   .med { font-size: 100%; letter-spacing: 0.5px; }
+   .small { font-size: 65%; letter-spacing: 0.5px; }
+   .no-space { letter-spacing: 0; }
+   
+   .row { display: block; text-align: center; }
+   .row:nth-child(2) { margin: 35px 0 50px; }
+   
+   .left { float: left; }
+   .right { float: right; }
+   
+   p { margin: 0; }
+   
+   /* ========== 3) Carte (base desktop & paysage) ========== */
+   .card {
+     position: relative;
+     background-color: var(--primary-color);
+     background-image: url("https://www.transparenttextures.com/patterns/paper-fibers.png");
+     background-size: cover;
+     width: var(--card-width);
+     height: var(--card-height);
+     margin: 20vh auto 0;
+     padding: 20px 10px 10px;
+   
+     transform: rotateX(60deg) rotateY(0) rotateZ(45deg);
+     box-shadow: none;
+   
+     transition:
+       transform 0.4s var(--transition-ease),
+       box-shadow 0.4s var(--transition-ease);
+     will-change: transform, box-shadow;
+   
+     touch-action: manipulation;
+     user-select: none;
+   }
+   
+   /* Hover seulement si un pointeur “hover” existe */
+   @media (hover: hover) {
+     .card:hover {
+       cursor: pointer;
+       transform: rotateX(60deg) rotateY(0) rotateZ(45deg) translateZ(10px);
+       box-shadow: 20px 20px 20px var(--shadow-color);
+     }
+   }
+   
+   /* Focus (clavier / accessibilité) */
+   .card:focus {
+     outline: none;
+     transform: rotateX(0) rotateY(0) rotateZ(0) translateZ(10px);
+     box-shadow: 0 10px 10px var(--shadow-color);
+   }
+   
+   /* Bordures / arêtes 3D */
+   .card::before,
+   .card::after {
+     content: "";
+     position: absolute;
+     display: block;
+     background-color: var(--border-color);
+     transition:
+       transform 0.4s var(--transition-ease),
+       height 0.4s var(--transition-ease),
+       width 0.4s var(--transition-ease);
+   }
+   
+   .card::before {
+     width: 100%;
+     height: var(--border-width);
+     bottom: 0;
+     left: 0;
+     transform: skewX(45deg) translate(-3px, 6px);
+   }
+   .card:focus::before { transform: none; height: 0; }
+   
+   .card::after {
+     height: 100%;
+     width: var(--border-width);
+     top: 0;
+     right: 0;
+     transform: skewY(45deg) translate(6px, -3px);
+   }
+   .card:focus::after { transform: none; width: 0; }
+   
+   /* ========== 4) QR code ========== */
+   .qrcode-container {
+     position: absolute;
+     bottom: 15px;
+     right: 15px;
+     width: 60px;
+     height: 60px;
+     background: #fff;
+     padding: 5px;
+     display: flex;
+     justify-content: center;
+     align-items: center;
+     box-shadow: 0 2px 5px rgba(0,0,0,.2);
+     z-index: 5;
+   }
+   
+   /* ========== 5) Portrait (mobile) — carte plate et proportionnelle ========== */
+   /* On priorise les queries par capacités: mieux que cibler des modèles précis */
+   @media (orientation: portrait) and (max-width: 430px),
+          (hover: none) and (pointer: coarse) and (orientation: portrait) {
+   
+     html { font-size: 9px; }
+   
+     .card {
+       /* Taille logique de référence (non scaled) */
+       width: calc(var(--card-w) * 1px);
+       height: calc(var(--card-h) * 1px);
+   
+       /* Scaling automatique pour rentrer en largeur avec marge de 24px */
+       --scale: clamp(0.6, calc((100vw - 24px) / (var(--card-w) * 1px)), 1);
+   
+       transform: translateZ(0) scale(var(--scale)) !important;
+       transform-origin: top center;
+       transition: none !important;
+   
+       /* carte plate */
+       box-shadow: 0 8px 22px rgba(0,0,0,.18);
+       margin: 12vh auto 0; /* espace sous encoche */
+     }
+   
+     /* désactive états interactifs en portrait */
+     .card:hover,
+     .card:focus,
+     .card:active {
+       transform: translateZ(0) scale(var(--scale)) !important;
+       box-shadow: 0 8px 22px rgba(0,0,0,.18) !important;
+       transition: none !important;
+     }
+   
+     /* replie les arêtes/bordures 3D */
+     .card::before,
+     .card::after {
+       width: 0 !important;
+       height: 0 !important;
+       transform: none !important;
+       transition: none !important;
+     }
+   
+     /* QR lisible, discret */
+     .qrcode-container {
+       width: min(14vw, 56px) !important;
+       height: min(14vw, 56px) !important;
+       right: min(4vw, 16px) !important;
+       bottom: min(4vw, 16px) !important;
+     }
+   
+     .row:nth-child(2) { margin: 25px 0 40px; }
+   }
+   
+   /* ========== 6) Paysage (mobile) — proportions + centrage ========== */
+   @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+     html { font-size: 8px; }
+   
+     .card {
+       width: min(70vh, 520px);
+       height: calc(min(70vh, 520px) * (200 / 350));
+       margin: 8vh auto 0; /* on garde l’animation 3D par défaut */
+       transform: rotateX(55deg) rotateZ(40deg);
+     }
+   
+     .qrcode-container {
+       bottom: 3vh !important;
+       right: 3vh !important;
+     }
+   }
+   
+   /* Centrage parfait en paysage via un wrapper .stage (recommandé) */
+   .stage {
+     min-height: 100svh;
+     display: grid;
+     align-content: start;  /* en portrait: commence sous la barre d’état */
+     justify-items: center;
+   }
+   @media (orientation: landscape) {
+     .stage { place-content: center; justify-items: center; }
+   }
+   
+   /* Fallback si pas de .stage: centre le body en paysage uniquement */
+   @media (orientation: landscape) {
+     body { min-height: 100svh; display: grid; place-content: center; }
+   }
+   
+   /* ========== 7) Responsive “général” ========== */
+   /* Conserve un léger downscale si on force (ex: petits tablets) */
+   @media (max-width: 768px) {
+     html { font-size: 8.5px; }
+   
+     /* si jamais le bloc portrait n’est pas actif (tablettes étroites),
+        on garde une taille raisonnable de secours */
+     .card {
+       width: 90vw;
+       height: calc(90vw * (200 / 350));
+       max-width: calc(var(--card-width) * var(--mobile-scale));
+       max-height: calc(var(--card-height) * var(--mobile-scale));
+       margin: 15vh auto 0;
+     }
+   }
+   
+   /* ========== 8) Accessibilité mouvement ==========
+      Désactive transitions/anim si l’utilisateur préfère moins d’animations */
+   @media (prefers-reduced-motion: reduce) {
+     .card,
+     .card::before,
+     .card::after {
+       transition: none !important;
+     }
+   }
+   
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+   /* ===== Portrait iPhone : tout tient dans la carte ===== */
+@media (orientation: portrait) and (max-width: 430px),
+(hover: none) and (pointer: coarse) and (orientation: portrait) {
 
-html {
-  font-family: "Cormorant Garamond", serif;
-  text-transform: uppercase;
-  font-size: 10.5px;
-  letter-spacing: 1px;
-  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5),
-               -1px -1px 1px rgba(179, 179, 179, 0.5),
-               1px 1px 0 rgba(255, 255, 255, 0.55),
-               0 1px 3px white;
-  overflow-x: hidden;
-  color: #191919;
-  background-color: azure;
-  height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
-}
-
-button {
-  display: block;
-  position: relative;
-  background: none;
-  color: inherit;
-  border: none;
-  padding: 0;
-  font: inherit;
-  cursor: pointer;
-  outline: none;
-  z-index: 10;
-}
-
-.clearfix::after {
-  content: "";
-  clear: both;
-  display: table;
-}
-
-.big {
-  font-size: 150%;
-}
-
-.med {
-  font-size: 100%;
-  letter-spacing: 0.5px;
-}
-
-.small {
-  font-size: 65%;
-  letter-spacing: 0.5px;
-}
-
-/* Carte 3D (version originale corrigée) */
+/* 1) La carte reste “plate” (vos règles existent déjà) — on affine la mise à l’échelle interne */
 .card {
-  background-color: #f4f1eb;
-  background-image: url("https://www.transparenttextures.com/patterns/paper-fibers.png");
-  height: 200px;
-  width: 350px;
-  margin: 0 auto;
-  padding: 20px 10px 10px 10px;
-  transform: rotateX(60deg) rotateY(0deg) rotateZ(45deg);
-  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
-  transition: transform 0.4s ease, box-shadow 0.4s ease;
-  position: relative;
+/* base: vous avez déjà --scale (0.6 → 1). On réduit un peu plus le contenu */
+--content-scale: calc(var(--scale) * 0.88);
+
+/* typo/espacement internes proportionnels */
+font-size: calc(10.5px * var(--content-scale));
+line-height: 1.15;
+letter-spacing: 0.9px;
+
+/* padding proportionnel pour éviter que le contenu touche les bords */
+padding: clamp(8px, 2.8vw, 14px) clamp(10px, 4vw, 16px) clamp(10px, 4vw, 18px);
 }
 
-.card:hover {
-  transform: rotateX(60deg) rotateY(0deg) rotateZ(45deg) translateZ(10px);
-  box-shadow: 20px 20px 20px rgba(0, 0, 0, 0.4);
+/* 2) Échelles des utilitaires texte (en em pour suivre la font-size de .card) */
+.big   { font-size: 1.35em; }
+.med   { font-size: 1.00em; letter-spacing: 0.45px; }
+.small { font-size: 0.62em; letter-spacing: 0.45px; }
+
+/* 3) Dernière ligne (ex: adresse) légèrement plus petite et resserrée */
+.row:last-child {
+font-size: 0.85em;
+letter-spacing: 0.6px;
+margin-top: 0.6em;
 }
 
-.card:active {
-  transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) translateZ(10px);
-  box-shadow: 0 10px 10px rgba(0, 0, 0, 0.4);
-}
-
-.card:active::before {
-  transform: skewX(0deg) translateX(0) translateY(0);
-  height: 0;
-}
-
-.card:active::after {
-  transform: skewY(0deg) translateX(0) translateY(0);
-  width: 0;
-}
-
-/* Bords 3D (corrigés) */
-.card::before,
-.card::after {
-  content: "";
-  position: absolute;
-  display: block;
-  background-color: grey;
-  transition: all 0.4s ease;
-  z-index: -1;
-}
-
-.card::before {
-  width: 100%;
-  height: 6px;
-  bottom: 0;
-  left: 0;
-  transform: skewX(45deg) translateX(-3px) translateY(6px);
-  transform-origin: bottom left;
-}
-
-.card::after {
-  height: 100%;
-  width: 6px;
-  top: 0;
-  right: 0;
-  transform: skewY(45deg) translateX(6px) translateY(-3px);
-  transform-origin: top right;
-}
-
-/* Conteneur QR Code */
+/* 4) QR code: taille relative à la carte, bien “rentré” dans les bords */
 .qrcode-container {
-  position: absolute;
-  bottom: 15px;
-  right: 15px;
-  width: 60px;
-  height: 60px;
-  background: white;
-  padding: 5px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+/* taille = ~13% de la largeur carte (après scale), bornée */
+width:  clamp(40px, calc(var(--card-w) * 0.13px * var(--content-scale)), 56px);
+height: clamp(40px, calc(var(--card-w) * 0.13px * var(--content-scale)), 56px);
+
+/* placer à l’intérieur, en respectant le padding */
+right:  clamp(8px, 2.8vw, 14px);
+bottom: clamp(8px, 2.8vw, 14px);
+
+padding: 4px;                 /* cadre blanc plus fin */
+box-shadow: 0 1px 3px rgba(0,0,0,.18);
+}
+.qrcode-container img { width: 100%; height: auto; display: block; }
+
+/* 5) Micro-ajustements de mise en page pour éviter tout débordement */
+.row { margin-left: 0.2em; margin-right: 0.2em; }
+.left, .right { float: none; display: inline-block; vertical-align: middle; }
 }
 
-.row {
-  display: block;
-  text-align: center;
-}
-
-.row:nth-child(2) {
-  margin: 35px 0 50px 0;
-}
-
-.left {
-  float: left;
-}
-
-.right {
-  float: right;
-}
-
-p {
-  margin: 0;
-}
-
-/* Responsive pour iPhone */
-@media (max-width: 768px) {
-  html {
-    font-size: 8px;
-    padding: 10px;
-  }
-
-  .card {
-    width: 90vw;
-    height: 180px;
-    transform: rotateX(45deg) rotateY(0) rotateZ(30deg);
-    margin: 0;
-  }
-
-  .qrcode-container {
-    width: 50px;
-    height: 50px;
-    bottom: 10px;
-    right: 10px;
-  }
-
-  .row:nth-child(2) {
-    margin: 20px 0 30px 0;
+/* Portrait mobile: cacher les éléments marqués */
+@media (orientation: portrait) and (max-width: 430px),
+       (hover: none) and (pointer: coarse) and (orientation: portrait) {
+  [data-hide-portrait] { 
+    display: none !important; 
   }
 }

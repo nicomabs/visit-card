@@ -13,7 +13,7 @@
 <body>
     <button class="card" id="businessCard">
         <div class="row clearfix">
-            <div class="left big">+33 6 43 00 81 34</div>
+            <div class="left big" data-hide-portrait>+33 6 43 00 81 34</div>
             <div class="right">
                 <p><span class="big">N</span>ovence <span class="big">A</span>vocats</p>
             </div>
@@ -22,7 +22,7 @@
             <p><span class="big">O</span>riane <span class="big">Claude</span></p>
         </div>
         <div class="row">
-            <p><span class="med">21 rue Bouffard, 33000 Bordeaux</span></p>
+            <p><span class="med" data-hide-portrait>21 rue Bouffard, 33000 Bordeaux</span></p>
         </div>
         <!-- Conteneur pour le QR Code -->
         <div class="qrcode-container" id="qrcode"></div>
@@ -51,9 +51,24 @@
         });
 
         // Effet toggle au clic
-    card.addEventListener('click', function(e) {
-      e.preventDefault();
-      this.classList.toggle('active');
+      
+  /* ---------- JAVASCRIPT POUR LE TOGGLE (À AJOUTER) ---------- */
+    document.addEventListener('DOMContentLoaded', function() {
+      const card = document.querySelector('.card');
+  
+      card.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (!this.classList.contains('active')) {
+          // Premier clic : redresse + zoom
+          this.classList.add('active');
+        } else {
+          // Deuxième clic : retour avec effet rallongé
+          this.classList.add('return');
+          setTimeout(() => {
+            this.classList.remove('active', 'return');
+          }, 800); // Durée = transition CSS
+        }
+      });
     });
       </script>
       
