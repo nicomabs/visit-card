@@ -32,133 +32,99 @@
     <div class="qrcode-container" id="qrcode" aria-label="QR Code"></div>
   </button>
   <script>
-    // Base GitHub Pages
-    const BASE = 'https://nicomabs.github.io/visit-card/';
+    // ===== Config / Détection d'environnement =====
+    // Si tu as déjà un env.js qui définit window.__ENV, on s'en sert.
+    // Sinon, on autodétecte: GitHub Pages Project Pages => '/visit-card/', Prod => '/'.
+    const __AUTO_ENV__ = (() => {
+      const isGH = location.hostname.endsWith('github.io');
+      const BASE = isGH ? '/visit-card/' : '/';
+      const PUBLIC_URL = location.origin + BASE;
+      return { MODE: isGH ? 'dev' : 'prod', BASE, PUBLIC_URL };
+    })();
+    const ENV = window.__ENV || __AUTO_ENV__;
   
-    // Utilitaires
+    // ===== Utils =====
     const qs = (k) => new URL(location.href).searchParams.get(k) || '';
-    const escapeVC = (txt='') => String(txt).replace(/[,;]/g, '\\$&');
-  
-    // vCard 3.0 compatible iOS (CRLF requis)
-    function buildVCard(c) {
-      const CRLF = '\r\n';
-      const now = new Date().toISOString().replace(/[-:]/g,'').split('.')[0] + 'Z';
-      const adr = `;;${escapeVC(c.street)};${escapeVC(c.city)};;${escapeVC(c.postalCode)};${escapeVC(c.country)}`;
-      return [
-        'BEGIN:VCARD',
-        'VERSION:3.0',
-        `N:${escapeVC(c.lastName)};${escapeVC(c.firstName)};;;`,
-        `FN:${escapeVC(c.firstName)} ${escapeVC(c.lastName)}`,
-        c.title ? `TITLE:${escapeVC(c.title)}` : '',
-        c.org ? `ORG:${escapeVC(c.org)}` : '',
-        c.tel ? `TEL;TYPE=CELL,VOICE:${String(c.tel).replace(/\s+/g,'')}` : '',
-        c.email ? `EMAIL;TYPE=INTERNET:${c.email}` : '',
-        c.street || c.city || c.postalCode || c.country ? `ADR;TYPE=WORK:${adr}` : '',
-        c.url ? `URL:${c.url}` : '',
-        c.note ? `NOTE:${escapeVC(c.note)}` : '',
-        `REV:${now}`,
-        'END:VCARD'
-      ].filter(Boolean).join(CRLF) + CRLF;
-    }
+    const $ = (id) => document.getElementById(id);
   
     async function init() {
-      try {
-        
-        // 1) Charger JSON
-        const res = await fetch(`${BASE}data/contacts.json`, { cache: 'no-store' });
-        console.log(res)
-        if (!res.ok) throw new Error(`contacts.json HTTP ${res.status}`);
-        let data = await res.json();
-
-        console.log("data", data)
+      // --- 1) Charger les données ---
+      const contactsUrl = ENV.BASE + 'data/contacts.json';
+      const res = await fetch(contactsUrl, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`contacts.json HTTP ${res.status}`);
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : Array.isArray(data.contacts) ? data.contacts : [];
+      if (!list.length) throw new Error('Aucun contact dans contacts.json');
   
-        // Accepter tableau nu ou {contacts:[...]}
-        const list = Array.isArray(data) ? data : Array.isArray(data.contacts) ? data.contacts : [];
-        if (!list.length) throw new Error('Aucun contact dans contacts.json');
+      // --- 2) Sélection du contact ---
+      const id = qs('id');
+      const contact = (id && list.find(c => c.id === id)) || list[0];
+      if (!contact) throw new Error('Contact introuvable');
   
-        // 2) Sélection du contact: ?id=oriane (sinon 1er)
-        const id = qs('id');
-        const contact = (id && list.find(c => c.id === id)) || list[0];
+      // --- 3) Injection dans le DOM ---
+      const first = $('firstName'), last = $('lastName'), org = $('org');
+      const tel = $('tel'), addr = $('address'), dl = $('downloadVcf');
   
-        // 3) Injecter le texte (avec garde)
-        const $ = (id) => document.getElementById(id);
-        const first = $('firstName'), last = $('lastName'), org = $('org');
-        const tel = $('tel'), addr = $('address'), dl = $('downloadVcf');
+      if (!first || !last || !org || !tel || !addr || !dl) {
+        throw new Error('IDs manquants (firstName, lastName, org, tel, address, downloadVcf)');
+      }
   
-        if (!first || !last || !org || !tel || !addr || !dl) {
-          throw new Error('IDs manquants dans le HTML (firstName, lastName, org, tel, address, downloadVcf)');
-        }
+      first.textContent = contact.firstName || '';
+      last.textContent  = contact.lastName  || '';
+      org.textContent   = contact.org       || '';
+      tel.textContent   = contact.tel       || '';
   
-        first.textContent = contact.firstName || '';
-        last.textContent  = contact.lastName  || '';
-        org.textContent   = contact.org       || '';
-        tel.textContent   = contact.tel       || '';
-        addr.textContent  = [contact.street, [contact.postalCode, contact.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+      const addressLine = [
+        contact.street || '',
+        [contact.postalCode, contact.city].filter(Boolean).join(' ')
+      ].filter(Boolean).join(', ');
+      addr.textContent = addressLine;
   
-        // 4) Générer vCard + lien de téléchargement
-        const vcf = buildVCard(contact);
-        const blob = new Blob([vcf], { type: 'text/vcard;charset=utf-8' });
-        const vcfUrl = URL.createObjectURL(blob);
-        dl.href = vcfUrl;
-        dl.download = `${(contact.firstName||'contact')}-${(contact.lastName||'')}.vcf`.replace(/\s+/g,'-');
+      // --- 4) Lien .vcf servi par le Service Worker ---
+      dl.href = ENV.BASE + 'vcf/' + encodeURIComponent(contact.id) + '.vcf';
+      dl.setAttribute('download', `${(contact.firstName||'')}_${(contact.lastName||'')}.vcf`);
+      // IMPORTANT: aucun e.preventDefault() ni génération de Blob ici.
   
-        // 5) QR Code → URL canonique du profil sous /visit-card/
-        const shareUrl = `${location.origin}${BASE}?id=${encodeURIComponent(contact.id)}`;
-        if (window.QRCode && document.getElementById('qrcode')) {
-          new QRCode(document.getElementById('qrcode'), {
-            text: shareUrl,
-            width: 84, height: 84,
-            colorDark: "#000",
-            colorLight: "#fff",
-            correctLevel: QRCode.CorrectLevel.M
-          });
-        } else {
-          console.warn('QRCode lib manquante ou #qrcode introuvable');
-        }
+      // --- 5) QR code vers l'URL canonique ---
+      const shareUrl = ENV.PUBLIC_URL + '?id=' + encodeURIComponent(contact.id);
+      if (window.QRCode && $('qrcode')) {
+        new QRCode($('qrcode'), {
+          text: shareUrl,
+          width: 84, height: 84,
+          colorDark: "#000", colorLight: "#fff",
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      }
   
-        // 6) Auto-proposer le téléchargement si la page ouverte via QR
-        // iOS bloque parfois les "click()" synthétiques ; on affiche aussi un hint visuel.
-        const fromQR = !!qs('id') && !sessionStorage.getItem('vcfPrompted');
-        if (fromQR) {
-          sessionStorage.setItem('vcfPrompted', '1');
-          setTimeout(() => {
-            try { dl.click(); } catch (e) { console.warn('Auto-click bloqué par le navigateur'); }
-          }, 400);
-        }
-  
-        // 7) Effet toggle existant (optionnel)
-        const card = document.querySelector('.card');
-        if (card) {
-          card.addEventListener('click', function(e) {
-            e.preventDefault();
-            if (!this.classList.contains('active')) {
-              this.classList.add('active');
-            } else {
-              this.classList.add('return');
-              setTimeout(() => this.classList.remove('active','return'), 800);
-            }
-          });
-        }
-      } catch (err) {
-        console.error('[init] Erreur:', err);
-        // Message minimal côté UI (facultatif)
-        const dl = document.getElementById('downloadVcf');
-        if (dl) dl.textContent = 'Erreur de chargement';
+      // --- 6) Effets UI éventuels (optionnel) ---
+      const card = document.querySelector('.card');
+      if (card) {
+        card.addEventListener('click', function(e) {
+          e.preventDefault();
+          if (!this.classList.contains('active')) {
+            this.classList.add('active');
+          } else {
+            this.classList.add('return');
+            setTimeout(() => this.classList.remove('active','return'), 800);
+          }
+        });
       }
     }
   
     // Démarrage
-    document.readyState === 'loading'
-      ? document.addEventListener('DOMContentLoaded', init)
-      : init();
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => init().catch(console.error));
+    } else {
+      init().catch(console.error);
+    }
   
-    // Enregistrement du service worker PWA
+    // Enregistrement du Service Worker (chemin en DEV/PROD via ENV.BASE)
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register(`${BASE}sw.js`).catch(console.error);
+        navigator.serviceWorker.register(ENV.BASE + 'sw.js').catch(console.error);
       });
     }
   </script>
-   
+  
 </body>
 </html>

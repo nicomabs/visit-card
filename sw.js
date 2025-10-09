@@ -1,64 +1,97 @@
-// sw.js — GitHub Pages /visit-card/
-const BASE = '/visit-card/';
-const VERSION = 'v1.0.0';
-const STATIC_CACHE = `static-${VERSION}`;
-const RUNTIME_CACHE = `runtime-${VERSION}`;
+// sw.js
+const VERSION = 'v1.2.0';
 
-const STATIC_ASSETS = [
-  `${BASE}`,
-  `${BASE}index.html`,
-  `${BASE}style.css`,
-  `${BASE}manifest.webmanifest`,
-  `${BASE}data/contacts.json`,
-  `${BASE}icons/icon-192.png`,
-  `${BASE}icons/icon-512.png`,
-  `${BASE}icons/maskable-512.png`
-];
-
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(STATIC_CACHE).then((c) => c.addAll(STATIC_ASSETS))
-  );
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => ![STATIC_CACHE, RUNTIME_CACHE].includes(k)).map(k => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
-});
-
-// Helper: SWR pour JSON
-async function staleWhileRevalidate(req) {
-  const cache = await caches.open(RUNTIME_CACHE);
-  const cached = await cache.match(req);
-  const network = fetch(req).then(res => {
-    cache.put(req, res.clone());
-    return res;
-  }).catch(() => cached);
-  return cached || network;
+function buildVCard(c) {
+  const esc = (s='') => String(s).replace(/[,;]/g, '\\$&');
+  const N  = `${esc(c.lastName||'')};${esc(c.firstName||'')};;;`;
+  const FN = `${esc([c.firstName, c.lastName].filter(Boolean).join(' '))}`;
+  const ADR = (c.street||c.city||c.postalCode||c.country)
+    ? `ADR;TYPE=WORK:;;${esc(c.street||'')};${esc(c.city||'')};;${esc(c.postalCode||'')};${esc(c.country||'')}`
+    : '';
+  const L = [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    `N:${N}`,
+    `FN:${FN}`,
+    c.org   ? `ORG:${esc(c.org)}`   : '',
+    c.title ? `TITLE:${esc(c.title)}` : '',
+    c.tel   ? `TEL;TYPE=CELL:${esc(c.tel)}` : '',
+    c.email ? `EMAIL;TYPE=INTERNET:${esc(c.email)}` : '',
+    ADR,
+    c.url   ? `URL:${esc(c.url)}`   : '',
+    'END:VCARD'
+  ].filter(Boolean);
+  // iOS/Contacts aiment CRLF
+  return L.join('\r\n');
 }
 
-self.addEventListener('fetch', (event) => {
-  const req = event.request;
-  const url = new URL(req.url);
+self.addEventListener('install', (e) => {
+  e.waitUntil((async () => {
+    const base = new URL(self.registration.scope).pathname; // '/visit-card/' en dev, '/' en prod
+    const cache = await caches.open('visit-card-' + VERSION);
+    await cache.addAll([
+      base,
+      base + 'index.html',
+      base + 'style.css',
+      base + 'env.js',
+      base + 'data/contacts.json',
+      base + 'manifest.webmanifest',
+      base + 'icons/icon-192.png',
+      base + 'icons/icon-512.png'
+    ].map(u => new Request(u, { cache: 'no-store' })));
+    await self.skipWaiting();
+  })());
+});
 
-  // Même origine uniquement
-  if (url.origin !== location.origin) return;
+self.addEventListener('activate', (e) => {
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(k => k !== 'visit-card-' + VERSION).map(k => caches.delete(k)));
+    await self.clients.claim();
+  })());
+});
 
-  // Stale-while-revalidate pour le JSON de contacts
-  if (url.pathname === `${BASE}data/contacts.json`) {
-    event.respondWith(staleWhileRevalidate(req));
+self.addEventListener('fetch', (e) => {
+  const url = new URL(e.request.url);
+  const base = new URL(self.registration.scope).pathname; // scope dynamique
+  // Route virtuelle: /.../vcf/{id}.vcf
+  if (url.pathname.startsWith(base + 'vcf/') && url.pathname.endsWith('.vcf')) {
+    e.respondWith((async () => {
+      try {
+        const id = url.pathname.slice((base + 'vcf/').length).replace(/\.vcf$/,'');
+        // charge contacts.json depuis le cache ou le réseau
+        const contactsReq = new Request(base + 'data/contacts.json', { cache: 'no-store' });
+        let res = await caches.match(contactsReq);
+        if (!res) res = await fetch(contactsReq);
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (data.contacts || []);
+        const c = list.find(x => String(x.id) === id);
+        if (!c) return new Response('Contact not found', { status: 404 });
+
+        const vcf = buildVCard(c);
+        return new Response(vcf, {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/vcard; charset=utf-8',
+            // iOS ignore parfois Content-Disposition, mais ça aide Android/desktop
+            'Content-Disposition': `attachment; filename="${(c.firstName||'')}_${(c.lastName||'')}.vcf"`
+          }
+        });
+      } catch (err) {
+        return new Response('Error generating VCF', { status: 500 });
+      }
+    })());
     return;
   }
 
-  // Cache-first pour l'App Shell et fichiers sous /visit-card/
-  if (url.pathname.startsWith(BASE)) {
-    event.respondWith(
-      caches.match(req).then(cached => cached || fetch(req))
-    );
-  }
+  // cache-first simple pour le reste
+  e.respondWith((async () => {
+    const cached = await caches.match(e.request);
+    if (cached) return cached;
+    try {
+      return await fetch(e.request);
+    } catch {
+      return cached || Response.error();
+    }
+  })());
 });
