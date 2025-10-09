@@ -33,7 +33,7 @@
   </button>
   <script>
     // Base GitHub Pages
-    const BASE = '/visit-card/';
+    const BASE = 'https://nicomabs.github.io/visit-card/';
   
     // Utilitaires
     const qs = (k) => new URL(location.href).searchParams.get(k) || '';
@@ -63,10 +63,14 @@
   
     async function init() {
       try {
+        
         // 1) Charger JSON
         const res = await fetch(`${BASE}data/contacts.json`, { cache: 'no-store' });
+        console.log(res)
         if (!res.ok) throw new Error(`contacts.json HTTP ${res.status}`);
         let data = await res.json();
+
+        console.log("data", data)
   
         // Accepter tableau nu ou {contacts:[...]}
         const list = Array.isArray(data) ? data : Array.isArray(data.contacts) ? data.contacts : [];
