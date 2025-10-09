@@ -31,14 +31,13 @@
     </div>
     <div class="qrcode-container" id="qrcode" aria-label="QR Code"></div>
   </button>
-
   <script>
-    // Base path GitHub Pages (Project Pages)
+    // Base GitHub Pages
     const BASE = '/visit-card/';
   
     // Utilitaires
-    const qs = (k) => new URL(location.href).searchParams.get(k);
-    const escapeVC = (txt='') => txt.replace(/[,;]/g, '\\$&');
+    const qs = (k) => new URL(location.href).searchParams.get(k) || '';
+    const escapeVC = (txt='') => String(txt).replace(/[,;]/g, '\\$&');
   
     // vCard 3.0 compatible iOS (CRLF requis)
     function buildVCard(c) {
@@ -51,10 +50,10 @@
         `N:${escapeVC(c.lastName)};${escapeVC(c.firstName)};;;`,
         `FN:${escapeVC(c.firstName)} ${escapeVC(c.lastName)}`,
         c.title ? `TITLE:${escapeVC(c.title)}` : '',
-        `ORG:${escapeVC(c.org)}`,
-        `TEL;TYPE=CELL,VOICE:${c.tel.replace(/\s+/g,'')}`,
+        c.org ? `ORG:${escapeVC(c.org)}` : '',
+        c.tel ? `TEL;TYPE=CELL,VOICE:${String(c.tel).replace(/\s+/g,'')}` : '',
         c.email ? `EMAIL;TYPE=INTERNET:${c.email}` : '',
-        `ADR;TYPE=WORK:${adr}`,
+        c.street || c.city || c.postalCode || c.country ? `ADR;TYPE=WORK:${adr}` : '',
         c.url ? `URL:${c.url}` : '',
         c.note ? `NOTE:${escapeVC(c.note)}` : '',
         `REV:${now}`,
@@ -63,68 +62,99 @@
     }
   
     async function init() {
-      // 1) Charger JSON (avec BASE)
-      const res = await fetch(`${BASE}data/contacts.json`, { cache: 'no-store' });
-      const data = await res.json();
+      try {
+        // 1) Charger JSON
+        const res = await fetch(`${BASE}data/contacts.json`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`contacts.json HTTP ${res.status}`);
+        let data = await res.json();
   
-      // 2) Sélection du contact: ?id=oriane (sinon 1er)
-      const id = qs('id');
-      const contact = (id ? data.contacts.find(c => c.id === id) : null) || data.contacts[0];
+        // Accepter tableau nu ou {contacts:[...]}
+        const list = Array.isArray(data) ? data : Array.isArray(data.contacts) ? data.contacts : [];
+        if (!list.length) throw new Error('Aucun contact dans contacts.json');
   
-      // 3) Injecter le texte
-      document.getElementById('firstName').textContent = contact.firstName;
-      document.getElementById('lastName').textContent  = contact.lastName;
-      document.getElementById('org').textContent       = contact.org;
-      document.getElementById('tel').textContent       = contact.tel;
-      document.getElementById('address').textContent   =
-        `${contact.street}, ${contact.postalCode} ${contact.city}`;
+        // 2) Sélection du contact: ?id=oriane (sinon 1er)
+        const id = qs('id');
+        const contact = (id && list.find(c => c.id === id)) || list[0];
   
-      // 4) Générer vCard + lien de téléchargement
-      const vcf = buildVCard(contact);
-      const blob = new Blob([vcf], {type:'text/vcard;charset=utf-8'});
-      const vcfUrl = URL.createObjectURL(blob);
-      const dl = document.getElementById('downloadVcf');
-      dl.href = vcfUrl;
-      dl.download = `${contact.firstName}-${contact.lastName}.vcf`;
+        // 3) Injecter le texte (avec garde)
+        const $ = (id) => document.getElementById(id);
+        const first = $('firstName'), last = $('lastName'), org = $('org');
+        const tel = $('tel'), addr = $('address'), dl = $('downloadVcf');
   
-      // 5) QR Code → URL canonique du profil sous /visit-card/
-      const shareUrl = `${location.origin}${BASE}?id=${encodeURIComponent(contact.id)}`;
-      new QRCode(document.getElementById('qrcode'), {
-        text: shareUrl,
-        width: 84, height: 84,
-        colorDark: "#000",
-        colorLight: "#fff",
-        correctLevel: QRCode.CorrectLevel.M
-      });
-  
-      // 6) Auto-proposer le téléchargement si la page ouverte via QR
-      const fromQR = qs('id') && !sessionStorage.getItem('vcfPrompted');
-      if (fromQR) {
-        sessionStorage.setItem('vcfPrompted', '1');
-        setTimeout(() => dl.click(), 400);
-      }
-  
-      // 7) Effet toggle existant
-      const card = document.querySelector('.card');
-      card.addEventListener('click', function(e) {
-        e.preventDefault();
-        if (!this.classList.contains('active')) {
-          this.classList.add('active');
-        } else {
-          this.classList.add('return');
-          setTimeout(() => this.classList.remove('active','return'), 800);
+        if (!first || !last || !org || !tel || !addr || !dl) {
+          throw new Error('IDs manquants dans le HTML (firstName, lastName, org, tel, address, downloadVcf)');
         }
-      });
-    }
-    init();
   
-    // Enregistrement du service worker PWA (avec BASE)
+        first.textContent = contact.firstName || '';
+        last.textContent  = contact.lastName  || '';
+        org.textContent   = contact.org       || '';
+        tel.textContent   = contact.tel       || '';
+        addr.textContent  = [contact.street, [contact.postalCode, contact.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  
+        // 4) Générer vCard + lien de téléchargement
+        const vcf = buildVCard(contact);
+        const blob = new Blob([vcf], { type: 'text/vcard;charset=utf-8' });
+        const vcfUrl = URL.createObjectURL(blob);
+        dl.href = vcfUrl;
+        dl.download = `${(contact.firstName||'contact')}-${(contact.lastName||'')}.vcf`.replace(/\s+/g,'-');
+  
+        // 5) QR Code → URL canonique du profil sous /visit-card/
+        const shareUrl = `${location.origin}${BASE}?id=${encodeURIComponent(contact.id)}`;
+        if (window.QRCode && document.getElementById('qrcode')) {
+          new QRCode(document.getElementById('qrcode'), {
+            text: shareUrl,
+            width: 84, height: 84,
+            colorDark: "#000",
+            colorLight: "#fff",
+            correctLevel: QRCode.CorrectLevel.M
+          });
+        } else {
+          console.warn('QRCode lib manquante ou #qrcode introuvable');
+        }
+  
+        // 6) Auto-proposer le téléchargement si la page ouverte via QR
+        // iOS bloque parfois les "click()" synthétiques ; on affiche aussi un hint visuel.
+        const fromQR = !!qs('id') && !sessionStorage.getItem('vcfPrompted');
+        if (fromQR) {
+          sessionStorage.setItem('vcfPrompted', '1');
+          setTimeout(() => {
+            try { dl.click(); } catch (e) { console.warn('Auto-click bloqué par le navigateur'); }
+          }, 400);
+        }
+  
+        // 7) Effet toggle existant (optionnel)
+        const card = document.querySelector('.card');
+        if (card) {
+          card.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (!this.classList.contains('active')) {
+              this.classList.add('active');
+            } else {
+              this.classList.add('return');
+              setTimeout(() => this.classList.remove('active','return'), 800);
+            }
+          });
+        }
+      } catch (err) {
+        console.error('[init] Erreur:', err);
+        // Message minimal côté UI (facultatif)
+        const dl = document.getElementById('downloadVcf');
+        if (dl) dl.textContent = 'Erreur de chargement';
+      }
+    }
+  
+    // Démarrage
+    document.readyState === 'loading'
+      ? document.addEventListener('DOMContentLoaded', init)
+      : init();
+  
+    // Enregistrement du service worker PWA
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register(`${BASE}sw.js`).catch(console.error);
       });
     }
   </script>
-  
+   
 </body>
 </html>
