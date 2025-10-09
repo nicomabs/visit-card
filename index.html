@@ -1,75 +1,130 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <title>Carte de visite - Oriane Claude</title>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="stylesheet" href="style.css">
-    <!-- Générateur de QR Code (à remplacer par votre lien vCard ou site) -->
-    <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
+  <title>Carte de visite</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#BFDFF0">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="manifest" href="/visit-card/manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
 </head>
 <body>
-    <button class="card" id="businessCard">
-        <div class="row clearfix">
-            <div class="left big" data-hide-portrait>+33 6 43 00 81 34</div>
-            <div class="right">
-                <p><span class="big">N</span>ovence <span class="big">A</span>vocats</p>
-            </div>
-        </div>
-        <div class="row">
-            <p><span class="big">O</span>riane <span class="big">Claude</span></p>
-        </div>
-        <div class="row">
-            <p><span class="med" data-hide-portrait>21 rue Bouffard, 33000 Bordeaux</span></p>
-        </div>
-        <!-- Conteneur pour le QR Code -->
-        <div class="qrcode-container" id="qrcode"></div>
-    </button>
+  <button class="card" id="businessCard">
+    <div class="row clearfix">
+      <div class="left big" data-hide-portrait id="tel">Téléphone</div>
+      <div class="right">
+        <p><span class="big" id="org">Organisation</span></p>
+      </div>
+    </div>
+    <div class="row">
+      <p><span class="big" id="firstName">Prénom</span> <span class="big" id="lastName">Nom</span></p>
+    </div>
+    <div class="row">
+      <p class="med" data-hide-portrait id="address">Adresse</p>
+    </div>
+    <div class="row">
+      <a id="downloadVcf" href="#" download="contact.vcf">Ajouter à Contacts</a>
+    </div>
+    <div class="qrcode-container" id="qrcode" aria-label="QR Code"></div>
+  </button>
 
-    <!-- Script pour générer le QR Code (remplacez l'URL) -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-          const card = document.querySelector('.card');
-          const qrcodeContainer = document.getElementById('qrcode');
-      
-          // Génération du QR Code (remplacez l'URL)
-          new QRCode(qrcodeContainer, {
-            text: "https://vcard.example.com/oriane-claude.vcf",
-            width: 60,
-            height: 60,
-            colorDark: "#000",
-            colorLight: "#fff",
-          });
-      
-          // Effet toggle au clic
-          card.addEventListener('click', function(e) {
-            e.preventDefault();
-            this.classList.toggle('active');
-          });
-        });
-
-        // Effet toggle au clic
-      
-  /* ---------- JAVASCRIPT POUR LE TOGGLE (À AJOUTER) ---------- */
-    document.addEventListener('DOMContentLoaded', function() {
-      const card = document.querySelector('.card');
+  <script>
+    // Base path GitHub Pages (Project Pages)
+    const BASE = '/visit-card/';
   
+    // Utilitaires
+    const qs = (k) => new URL(location.href).searchParams.get(k);
+    const escapeVC = (txt='') => txt.replace(/[,;]/g, '\\$&');
+  
+    // vCard 3.0 compatible iOS (CRLF requis)
+    function buildVCard(c) {
+      const CRLF = '\r\n';
+      const now = new Date().toISOString().replace(/[-:]/g,'').split('.')[0] + 'Z';
+      const adr = `;;${escapeVC(c.street)};${escapeVC(c.city)};;${escapeVC(c.postalCode)};${escapeVC(c.country)}`;
+      return [
+        'BEGIN:VCARD',
+        'VERSION:3.0',
+        `N:${escapeVC(c.lastName)};${escapeVC(c.firstName)};;;`,
+        `FN:${escapeVC(c.firstName)} ${escapeVC(c.lastName)}`,
+        c.title ? `TITLE:${escapeVC(c.title)}` : '',
+        `ORG:${escapeVC(c.org)}`,
+        `TEL;TYPE=CELL,VOICE:${c.tel.replace(/\s+/g,'')}`,
+        c.email ? `EMAIL;TYPE=INTERNET:${c.email}` : '',
+        `ADR;TYPE=WORK:${adr}`,
+        c.url ? `URL:${c.url}` : '',
+        c.note ? `NOTE:${escapeVC(c.note)}` : '',
+        `REV:${now}`,
+        'END:VCARD'
+      ].filter(Boolean).join(CRLF) + CRLF;
+    }
+  
+    async function init() {
+      // 1) Charger JSON (avec BASE)
+      const res = await fetch(`${BASE}data/contacts.json`, { cache: 'no-store' });
+      const data = await res.json();
+  
+      // 2) Sélection du contact: ?id=oriane (sinon 1er)
+      const id = qs('id');
+      const contact = (id ? data.contacts.find(c => c.id === id) : null) || data.contacts[0];
+  
+      // 3) Injecter le texte
+      document.getElementById('firstName').textContent = contact.firstName;
+      document.getElementById('lastName').textContent  = contact.lastName;
+      document.getElementById('org').textContent       = contact.org;
+      document.getElementById('tel').textContent       = contact.tel;
+      document.getElementById('address').textContent   =
+        `${contact.street}, ${contact.postalCode} ${contact.city}`;
+  
+      // 4) Générer vCard + lien de téléchargement
+      const vcf = buildVCard(contact);
+      const blob = new Blob([vcf], {type:'text/vcard;charset=utf-8'});
+      const vcfUrl = URL.createObjectURL(blob);
+      const dl = document.getElementById('downloadVcf');
+      dl.href = vcfUrl;
+      dl.download = `${contact.firstName}-${contact.lastName}.vcf`;
+  
+      // 5) QR Code → URL canonique du profil sous /visit-card/
+      const shareUrl = `${location.origin}${BASE}?id=${encodeURIComponent(contact.id)}`;
+      new QRCode(document.getElementById('qrcode'), {
+        text: shareUrl,
+        width: 84, height: 84,
+        colorDark: "#000",
+        colorLight: "#fff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+  
+      // 6) Auto-proposer le téléchargement si la page ouverte via QR
+      const fromQR = qs('id') && !sessionStorage.getItem('vcfPrompted');
+      if (fromQR) {
+        sessionStorage.setItem('vcfPrompted', '1');
+        setTimeout(() => dl.click(), 400);
+      }
+  
+      // 7) Effet toggle existant
+      const card = document.querySelector('.card');
       card.addEventListener('click', function(e) {
         e.preventDefault();
         if (!this.classList.contains('active')) {
-          // Premier clic : redresse + zoom
           this.classList.add('active');
         } else {
-          // Deuxième clic : retour avec effet rallongé
           this.classList.add('return');
-          setTimeout(() => {
-            this.classList.remove('active', 'return');
-          }, 800); // Durée = transition CSS
+          setTimeout(() => this.classList.remove('active','return'), 800);
         }
       });
-    });
-      </script> 
+    }
+    init();
+  
+    // Enregistrement du service worker PWA (avec BASE)
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register(`${BASE}sw.js`).catch(console.error);
+      });
+    }
+  </script>
+  
 </body>
 </html>

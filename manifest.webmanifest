@@ -1,0 +1,16 @@
+{
+    "name": "Carte de visite - Novence Avocats",
+    "short_name": "Carte Oriane",
+    "description": "Carte de visite avec vCard et QR code.",
+    "start_url": "/https://nicomabs.github.io/visit-card//?source=pwa",
+    "scope": "/https://nicomabs.github.io/visit-card//",
+    "display": "standalone",
+    "background_color": "#FFFFFF",
+    "theme_color": "#BFDFF0",
+    "icons": [
+      { "src": "/https://nicomabs.github.io/visit-card/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+      { "src": "/https://nicomabs.github.io/visit-card/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+      { "src": "/https://nicomabs.github.io/visit-card/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    ]
+  }
+  
