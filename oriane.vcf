@@ -1,0 +1,12 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Claude;Oriane;;;
+FN:Oriane Claude
+ORG:Novence Avocats
+TITLE:Avocate
+TEL;TYPE=CELL:+33 6 43 00 81 34
+EMAIL;TYPE=WORK:oclaude@eovence-avocats.fr
+ADR;TYPE=WORK:;;21 rue Bouffard;Bordeaux;;33000;France
+URL:https://novence-avocats.fr
+NOTE:Contact carte de visite virtuelle
+END:VCARD

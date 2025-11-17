@@ -1,0 +1,12 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Mauri;Sixtine;;;
+FN:Sixtine Mauri
+ORG:Novence Avocats
+TITLE:Avocate
+TEL;TYPE=CELL:+33 6 29 55 54 20
+EMAIL;TYPE=WORK:smauri@novence-avocats.fr
+ADR;TYPE=WORK:;;21 rue Bouffard;Bordeaux;;33000;France
+URL:https://novence-avocats.fr
+NOTE:Contact carte de visite virtuelle
+END:VCARD
