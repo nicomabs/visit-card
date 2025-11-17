@@ -31,11 +31,8 @@
     </div>
     <div class="qrcode-container" id="qrcode" aria-label="QR Code"></div>
   </button>
-  <script src="script.js"></script>
   <script>
     // ===== Config / Détection d'environnement =====
-    // Si tu as déjà un env.js qui définit window.__ENV, on s'en sert.
-    // Sinon, on autodétecte: GitHub Pages Project Pages => '/visit-card/', Prod => '/'.
     const __AUTO_ENV__ = (() => {
       const isGH = location.hostname.endsWith('github.io');
       const BASE = isGH ? '/visit-card/' : '/';
@@ -44,85 +41,105 @@
     })();
     const ENV = window.__ENV || __AUTO_ENV__;
   
+    // Fix bouton .vcf (nom cohérent)
+    // Ton élément dans le HTML s'appelle "downloadVcf"
+    const topParams = new URLSearchParams(window.location.search);
+    const defaultId = topParams.get('id') || 'oriane';
+  
     // ===== Utils =====
     const qs = (k) => new URL(location.href).searchParams.get(k) || '';
-    const $ = (id) => document.getElementById(id);
+    const  $  = (id) => document.getElementById(id);
   
     async function init() {
-      // --- 1) Charger les données ---
-      const contactsUrl = ENV.BASE + 'data/contacts.json';
-      const res = await fetch(contactsUrl, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`contacts.json HTTP ${res.status}`);
-      const data = await res.json();
-      const list = Array.isArray(data) ? data : Array.isArray(data.contacts) ? data.contacts : [];
-      if (!list.length) throw new Error('Aucun contact dans contacts.json');
+      try {
+        // --- 1) Charger les données ---
+        const contactsUrl = ENV.BASE + 'data/contacts.json';
+        const res = await fetch(contactsUrl, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`contacts.json HTTP  $ {res.status}`);
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (Array.isArray(data.contacts) ? data.contacts : []);
+        if (!list.length) throw new Error('Aucun contact dans contacts.json');
   
-      // --- 2) Sélection du contact ---
-      const id = qs('id');
-      const contact = (id && list.find(c => c.id === id)) || list[0];
-      if (!contact) throw new Error('Contact introuvable');
+        // --- 2) Sélection du contact ---
+        const urlId = qs('id') || defaultId;
+        const contact = list.find(c => String(c.id) === String(urlId)) || list[0];
+        if (!contact) throw new Error('Contact introuvable');
   
-      // --- 3) Injection dans le DOM ---
-      const first = $('firstName'), last = $('lastName'), org = $('org');
-      const tel = $('tel'), addr = $('address'), dl = $('downloadVcf');
+        // --- 3) Injection dans le DOM ---
+        const first =  $ ('firstName'), last =  $ ('lastName'), org =  $ ('org');
+        const tel =  $ ('tel'), addr =  $ ('address'), dl =  $ ('downloadVcf');
   
-      if (!first || !last || !org || !tel || !addr || !dl) {
-        throw new Error('IDs manquants (firstName, lastName, org, tel, address, downloadVcf)');
-      }
+        if (!first || !last || !org || !tel || !addr || !dl) {
+          throw new Error('IDs manquants (firstName, lastName, org, tel, address, downloadVcf)');
+        }
   
-      first.textContent = contact.firstName || '';
-      last.textContent  = contact.lastName  || '';
-      org.textContent   = contact.org       || '';
-      tel.textContent   = contact.tel       || '';
+        first.textContent = contact.firstName || '';
+        last.textContent  = contact.lastName  || '';
+        org.textContent   = contact.org       || '';
+        tel.textContent   = contact.tel       || '';
   
-      const addressLine = [
-        contact.street || '',
-        [contact.postalCode, contact.city].filter(Boolean).join(' ')
-      ].filter(Boolean).join(', ');
-      addr.textContent = addressLine;
+        const addressLine = [
+          contact.street || '',
+          [contact.postalCode, contact.city].filter(Boolean).join(' ')
+        ].filter(Boolean).join(', ');
+        addr.textContent = addressLine;
   
-      // --- 4) Lien .vcf servi par le Service Worker ---
-      dl.href = ENV.BASE + 'vcf/' + encodeURIComponent(contact.id) + '.vcf';
-      dl.setAttribute('download', `${(contact.firstName||'')}_${(contact.lastName||'')}.vcf`);
-      // IMPORTANT: aucun e.preventDefault() ni génération de Blob ici.
+        // --- 4) Lien .vcf servi par le Service Worker ---
+        dl.href = ENV.BASE + 'vcf/' + encodeURIComponent(contact.id) + '.vcf';
+        dl.setAttribute('download', ` $ {(contact.firstName||'')}_ $ {(contact.lastName||'')}.vcf`);
   
-      // --- 5) QR code vers l'URL canonique ---
-      const shareUrl = ENV.PUBLIC_URL + '?id=' + encodeURIComponent(contact.id);
-      if (window.QRCode && $('qrcode')) {
-        new QRCode($('qrcode'), {
-          text: shareUrl,
-          width: 84, height: 84,
-          colorDark: "#000", colorLight: "#fff",
-          correctLevel: QRCode.CorrectLevel.M
-        });
-      }
+        // --- 5) QR code vers l'URL canonique ---
+        const shareUrl = ENV.PUBLIC_URL + '?id=' + encodeURIComponent(contact.id);
+        if (window.QRCode &&  $ ('qrcode')) {
+          new QRCode( $ ('qrcode'), {
+            text: shareUrl,
+            width: 84, height: 84,
+            colorDark: "#000", colorLight: "#fff",
+            correctLevel: QRCode.CorrectLevel.M
+          });
+        }
   
-      // --- 6) Effets UI éventuels (optionnel) ---
-      const card = document.querySelector('.card');
-      if (card) {
-        card.addEventListener('click', function(e) {
-          e.preventDefault();
-          if (!this.classList.contains('active')) {
-            this.classList.add('active');
-          } else {
-            this.classList.add('return');
-            setTimeout(() => this.classList.remove('active','return'), 800);
-          }
-        });
+        // --- 6) Effets UI éventuels ---
+        const card = document.querySelector('.card');
+        if (card) {
+          card.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (!this.classList.contains('active')) {
+              this.classList.add('active');
+            } else {
+              this.classList.add('return');
+              setTimeout(() => this.classList.remove('active','return'), 800);
+            }
+          });
+        }
+      } catch (err) {
+        console.error('init error', err);
       }
     }
   
     // Démarrage
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => init().catch(console.error));
+      document.addEventListener('DOMContentLoaded', () => init());
     } else {
-      init().catch(console.error);
+      init();
     }
   
-    // Enregistrement du Service Worker (chemin en DEV/PROD via ENV.BASE)
+    // Enregistrement du Service Worker (avec logs)
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register(ENV.BASE + 'sw.js').catch(console.error);
+        const swPath = ENV.BASE + 'sw.js';
+        console.log('Attempting to register SW at', swPath);
+        navigator.serviceWorker.register(swPath)
+          .then(reg => {
+            console.log('Service worker registered. scope=', reg.scope);
+            // optionnel : log des actions d'état
+            if (reg.installing) console.log('SW state: installing');
+            if (reg.waiting) console.log('SW state: waiting');
+            if (reg.active) console.log('SW state: active');
+          })
+          .catch(err => {
+            console.error('SW registration failed for', swPath, err);
+          });
       });
     }
   </script>
