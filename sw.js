@@ -1,5 +1,5 @@
 /* sw.js — functional / ES2025 style */
-const VERSION = 'v2.0.0';
+const VERSION = 'v2.0.1';
 const CACHE_NAME = `visit-card-${VERSION}`;
 const DEBUG = true;
 
