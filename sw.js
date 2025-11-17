@@ -1,97 +1,167 @@
-// sw.js
-const VERSION = 'v1.2.0';
+/* sw.js — functional / ES2025 style */
+const VERSION = 'v2.0.0';
+const CACHE_NAME = `visit-card-${VERSION}`;
+const DEBUG = true;
 
-function buildVCard(c) {
-  const esc = (s='') => String(s).replace(/[,;]/g, '\\$&');
-  const N  = `${esc(c.lastName||'')};${esc(c.firstName||'')};;;`;
-  const FN = `${esc([c.firstName, c.lastName].filter(Boolean).join(' '))}`;
-  const ADR = (c.street||c.city||c.postalCode||c.country)
-    ? `ADR;TYPE=WORK:;;${esc(c.street||'')};${esc(c.city||'')};;${esc(c.postalCode||'')};${esc(c.country||'')}`
+/* ---------- util ---------- */
+const log = (...args) => DEBUG && console.log('[SW]', ...args);
+const warn = (...args) => DEBUG && console.warn('[SW]', ...args);
+const error = (...args) => console.error('[SW]', ...args);
+
+const jsonSafe = async res => {
+  if (!res) throw new Error('No response');
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+};
+
+const normalizeBase = scope => {
+  try {
+    return new URL(scope).pathname;
+  } catch {
+    return '/';
+  }
+};
+
+/* ---------- vCard builder (pure) ---------- */
+const escapeV = s => String(s ?? '').replace(/[,;]/g, '\\$&');
+const buildVCard = c => {
+  const N = `${escapeV(c.lastName)};${escapeV(c.firstName)};;;`;
+  const FN = escapeV([c.firstName, c.lastName].filter(Boolean).join(' '));
+  const adrParts = [c.street, c.city, c.postalCode, c.country].some(Boolean);
+  const ADR = adrParts
+    ? `ADR;TYPE=WORK:;;${escapeV(c.street)};${escapeV(c.city)};;${escapeV(c.postalCode)};${escapeV(c.country)}`
     : '';
-  const L = [
+  const lines = [
     'BEGIN:VCARD',
     'VERSION:3.0',
     `N:${N}`,
     `FN:${FN}`,
-    c.org   ? `ORG:${esc(c.org)}`   : '',
-    c.title ? `TITLE:${esc(c.title)}` : '',
-    c.tel   ? `TEL;TYPE=CELL:${esc(c.tel)}` : '',
-    c.email ? `EMAIL;TYPE=INTERNET:${esc(c.email)}` : '',
+    c.org ? `ORG:${escapeV(c.org)}` : '',
+    c.title ? `TITLE:${escapeV(c.title)}` : '',
+    c.tel ? `TEL;TYPE=CELL:${escapeV(c.tel)}` : '',
+    c.email ? `EMAIL;TYPE=INTERNET:${escapeV(c.email)}` : '',
     ADR,
-    c.url   ? `URL:${esc(c.url)}`   : '',
+    c.url ? `URL:${escapeV(c.url)}` : '',
     'END:VCARD'
   ].filter(Boolean);
-  // iOS/Contacts aiment CRLF
-  return L.join('\r\n');
-}
+  return lines.join('\r\n'); // CRLF for Contacts compatibility
+};
 
-self.addEventListener('install', (e) => {
-  e.waitUntil((async () => {
-    const base = new URL(self.registration.scope).pathname; // '/visit-card/' en dev, '/' en prod
-    const cache = await caches.open('visit-card-' + VERSION);
-    await cache.addAll([
-      base,
-      base + 'index.html',
-      base + 'style.css',
-      base + 'env.js',
-      base + 'data/contacts.json',
-      base + 'manifest.webmanifest',
-      base + 'icons/icon-192.png',
-      base + 'icons/icon-512.png'
-    ].map(u => new Request(u, { cache: 'no-store' })));
-    await self.skipWaiting();
+/* ---------- static assets to cache (computed at runtime) ---------- */
+const makeAssetsList = base => ([
+  base,
+  `${base}index.html`,
+  `${base}style.css`,
+  `${base}env.js`,
+  `${base}data/contacts.json`,
+  `${base}manifest.webmanifest`,
+  `${base}icons/icon-192.png`,
+  `${base}icons/icon-512.png`
+].map(u => new Request(u, { cache: 'no-store' })));
+
+/* ---------- lifecycle: install ---------- */
+self.addEventListener('install', (evt) => {
+  log('install', VERSION);
+  const base = normalizeBase(self.registration.scope);
+  evt.waitUntil((async () => {
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      const toCache = makeAssetsList(base);
+      log('caching resources:', toCache.map(r => r.url));
+      await cache.addAll(toCache);
+      log('cache completed');
+      await self.skipWaiting();
+      log('skipWaiting done');
+    } catch (err) {
+      error('install error', err);
+    }
   })());
 });
 
-self.addEventListener('activate', (e) => {
-  e.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.filter(k => k !== 'visit-card-' + VERSION).map(k => caches.delete(k)));
-    await self.clients.claim();
+/* ---------- lifecycle: activate ---------- */
+self.addEventListener('activate', (evt) => {
+  log('activate', VERSION);
+  evt.waitUntil((async () => {
+    try {
+      const keys = await caches.keys();
+      const purge = keys.filter(k => k !== CACHE_NAME);
+      await Promise.all(purge.map(k => {
+        log('deleting cache', k);
+        return caches.delete(k);
+      }));
+      await self.clients.claim();
+      log('clients.claim done');
+    } catch (err) {
+      error('activate error', err);
+    }
   })());
 });
 
-self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
-  const base = new URL(self.registration.scope).pathname; // scope dynamique
-  // Route virtuelle: /.../vcf/{id}.vcf
-  if (url.pathname.startsWith(base + 'vcf/') && url.pathname.endsWith('.vcf')) {
-    e.respondWith((async () => {
+/* ---------- helper: read contacts (cache-first) ---------- */
+const getContacts = async (base) => {
+  const req = new Request(`${base}data/contacts.json`, { cache: 'no-store' });
+  const cached = await caches.match(req);
+  if (cached) {
+    log('contacts.json -> from cache');
+    return jsonSafe(cached);
+  }
+  log('contacts.json -> fetch network');
+  const net = await fetch(req);
+  return jsonSafe(net);
+};
+
+/* ---------- fetch handler ---------- */
+self.addEventListener('fetch', (evt) => {
+  const reqUrl = new URL(evt.request.url);
+  const base = normalizeBase(self.registration.scope);
+
+  // route: /.../vcf/{id}.vcf
+  const vcfPrefix = `${base}vcf/`;
+  if (reqUrl.pathname.startsWith(vcfPrefix) && reqUrl.pathname.endsWith('.vcf')) {
+    const id = reqUrl.pathname.slice(vcfPrefix.length).replace(/\.vcf$/, '');
+    log('vcf request for id=', id);
+    evt.respondWith((async () => {
       try {
-        const id = url.pathname.slice((base + 'vcf/').length).replace(/\.vcf$/,'');
-        // charge contacts.json depuis le cache ou le réseau
-        const contactsReq = new Request(base + 'data/contacts.json', { cache: 'no-store' });
-        let res = await caches.match(contactsReq);
-        if (!res) res = await fetch(contactsReq);
-        const data = await res.json();
+        const data = await getContacts(base);
         const list = Array.isArray(data) ? data : (data.contacts || []);
-        const c = list.find(x => String(x.id) === id);
-        if (!c) return new Response('Contact not found', { status: 404 });
-
-        const vcf = buildVCard(c);
-        return new Response(vcf, {
+        const contact = list.find(x => String(x.id) === id);
+        if (!contact) {
+          warn('vcf: contact not found', id);
+          return new Response('Contact not found', { status: 404 });
+        }
+        const vcard = buildVCard(contact);
+        log(`vcf generated (${id}) length=${vcard.length}`);
+        return new Response(vcard, {
           status: 200,
           headers: {
             'Content-Type': 'text/vcard; charset=utf-8',
-            // iOS ignore parfois Content-Disposition, mais ça aide Android/desktop
-            'Content-Disposition': `attachment; filename="${(c.firstName||'')}_${(c.lastName||'')}.vcf"`
+            'Content-Disposition': `attachment; filename="${(contact.firstName||'')}_${(contact.lastName||'')}.vcf"`
           }
         });
       } catch (err) {
+        error('vcf generation error', err);
         return new Response('Error generating VCF', { status: 500 });
       }
     })());
     return;
   }
 
-  // cache-first simple pour le reste
-  e.respondWith((async () => {
-    const cached = await caches.match(e.request);
-    if (cached) return cached;
+  // default: cache-first then network
+  evt.respondWith((async () => {
     try {
-      return await fetch(e.request);
-    } catch {
-      return cached || Response.error();
+      const cached = await caches.match(evt.request);
+      if (cached) {
+        // log less verbosely for frequent resources
+        const dest = evt.request.destination || 'unknown';
+        log('cache-hit', dest, evt.request.url);
+        return cached;
+      }
+      log('network fetch', evt.request.url);
+      const fetched = await fetch(evt.request);
+      return fetched;
+    } catch (err) {
+      error('fetch handler error', evt.request.url, err);
+      return Response.error();
     }
   })());
 });
